@@ -11,7 +11,8 @@
 const float YAW = -90.0f;
 const float PITCH = 0.0f;
 const float SPEED = 2.5f;
-const float SENSITIVTY = 1.0f;
+const float SENSITIVTY = 0.1f;
+const float ZOOM = 45.0f;
 
 enum Camera_Movement {
 	FORWARD,
@@ -36,8 +37,9 @@ public:
 	// camera settings
 	float movementSpeed;
 	float mouseSensitivity;
+	float Zoom;
 
-	Camera(glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f), float yaw = YAW, float pitch = PITCH) : Front(glm::vec3(0.0f, 0.0f, -1.0f)), movementSpeed(SPEED), mouseSensitivity(SENSITIVTY)
+	Camera(glm::vec3 position = glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f), float yaw = YAW, float pitch = PITCH) : Front(glm::vec3(0.0f, 0.0f, -1.0f)), movementSpeed(SPEED), mouseSensitivity(SENSITIVTY), Zoom(ZOOM)
 	{
 		Position = position;
 		WorldUp = up;
@@ -70,6 +72,15 @@ public:
 			Position += Right * velocity;
 	}
 
+	void ProcessMouseScroll(float yoffset)
+	{
+		Zoom -= (float)yoffset;
+		if (Zoom < 1.0f)
+			Zoom = 1.0f;
+		if (Zoom > 130.0f)
+			Zoom = 130.0f;
+	}
+	
 	void ProcessMouseMovement(float xoffset, float yoffset, GLboolean constrainPitch = true)
 	{
 		xoffset *= mouseSensitivity;

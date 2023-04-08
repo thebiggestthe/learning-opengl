@@ -15,6 +15,7 @@
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn);
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
 
 // screen setup
@@ -26,13 +27,9 @@ const float GAME_FOV = 45.0f;
 
 // camera setup
 // ------------
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
-
-const float sensitivity = 0.1f;
+Camera camera;
 bool firstMouse = true;
 
-float yaw = -90.0f;
-float pitch = 0.0f;
 
 float lastX = SCR_WIDTH / 2, lastY = SCR_HEIGHT / 2;
 
@@ -61,6 +58,7 @@ int main()
 	}
 	glfwMakeContextCurrent(window);
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwSetScrollCallback(window, scroll_callback);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
 	// glad: load all opengl function pointers
@@ -163,9 +161,6 @@ int main()
 	shaderProgram.setInt("texture1", 0);
 	shaderProgram.setInt("texture2", 1);
 
-	// set up camera projection
-	camera.CreateProjection(GAME_FOV, (float)SCR_WIDTH, (float)SCR_HEIGHT, 0.1f, 100.0f, shaderProgram, "projection");
-
 	// render loop
 	// -----------
 	while (!glfwWindowShouldClose(window))
@@ -192,15 +187,12 @@ int main()
 		// activate shader
 		shaderProgram.Activate();
 
-		shaderProgram.setFloat("sinus", sin(glfwGetTime()));
-		shaderProgram.setFloat("cosinus", cos(glfwGetTime()));
-
-		// camera
-		// ------
+		// update camera projection
+		camera.CreateProjection(camera.Zoom, (float)SCR_WIDTH, (float)SCR_HEIGHT, 0.1f, 100.0f, shaderProgram, "projection");
+		
+		// send camera view matrix to vertex shader
 		glm::mat4 view = camera.GetViewMatrix();
 		shaderProgram.setMat4("view", view);
-
-
 
 		// triangle render
 		glBindVertexArray(VAO);
@@ -253,14 +245,16 @@ void processInput(GLFWwindow* window)
 		camera.ProcessKeyboardInput(LEFT, deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 		camera.ProcessKeyboardInput(RIGHT, deltaTime);
-
-	if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS){}
-		
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
 	glViewport(0, 0, width, height);
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+	camera.ProcessMouseScroll(static_cast<float>(yoffset));
 }
 
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
@@ -279,9 +273,6 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 	float yoffset = lastY - ypos;
 	lastX = xpos;
 	lastY = ypos;
-
-	xoffset *= sensitivity;
-	yoffset *= sensitivity;
 
 	camera.ProcessMouseMovement(xoffset, yoffset, firstMouse);
 }
