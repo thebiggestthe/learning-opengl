@@ -8,6 +8,8 @@
 #include "stb_image.h"
 
 #include "shaderClass.h"
+#include "cameraClass.h"
+#include "textureClass.h"
 
 #include <iostream>
 
@@ -24,9 +26,7 @@ const float GAME_FOV = 45.0f;
 
 // camera setup
 // ------------
-glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
-glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
-glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
 
 const float sensitivity = 0.1f;
 bool firstMouse = true;
@@ -136,7 +136,7 @@ int main()
 		glm::vec3(-1.3f,  1.0f, -1.5f)
 	};
 
-	// VBO and VBO
+	// VAO and VBO
 	//------------
 	unsigned int VBO, VAO;
 
@@ -155,65 +155,16 @@ int main()
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
 	glEnableVertexAttribArray(1);
 
-	// textures
-	// --------
-	unsigned int texture1, texture2;
-
-	// create texture 1
-	glGenTextures(1, &texture1);
-	glBindTexture(GL_TEXTURE_2D, texture1);
-	// texture wrapping
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
-	// texture filtering
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	// load texture 1
-	int width, height, nrChannels;
-	stbi_set_flip_vertically_on_load(true);
-	unsigned char* data = stbi_load("images/kitty.jpg", &width, &height, &nrChannels, 0);
-	if (data)
-	{
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-		glGenerateMipmap(GL_TEXTURE_2D);
-	}
-	else
-	{
-		std::cout << "failed to load texture" << std::endl;
-	}
-
-	// create texture 2
-	glGenTextures(1, &texture2);
-	//glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, texture2);
-	// texture wrapping
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	// texture filtering
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	// load texture 2
-	unsigned char* data2 = stbi_load("images/awesomeface.png", &width, &height, &nrChannels, 0);
-	if (data2)
-	{
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data2);
-		glGenerateMipmap(GL_TEXTURE_2D);
-	}
-	else
-	{
-		std::cout << "failed to load texture" << std::endl;
-	}
-	stbi_image_free(data2);
+	Texture texture1("images/kitty.jpg", GL_RGB);
+	Texture texture2("images/awesomeface.png", GL_RGBA);
 
 	// shader uniform for textures
 	shaderProgram.Activate();
 	shaderProgram.setInt("texture1", 0);
 	shaderProgram.setInt("texture2", 1);
 
-	// projection matrix
-	glm::mat4 projection = glm::mat4(1.0f);
-	projection = glm::perspective(glm::radians(GAME_FOV), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-	shaderProgram.setMat4("projection", projection);
+	// set up camera projection
+	camera.CreateProjection(GAME_FOV, (float)SCR_WIDTH, (float)SCR_HEIGHT, 0.1f, 100.0f, shaderProgram, "projection");
 
 	// render loop
 	// -----------
@@ -234,16 +185,19 @@ int main()
 
 		// bind texture
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, texture1);
+		glBindTexture(GL_TEXTURE_2D, texture1.ID);
 		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, texture2);
+		glBindTexture(GL_TEXTURE_2D, texture2.ID);
 
 		// activate shader
 		shaderProgram.Activate();
 
+		shaderProgram.setFloat("sinus", sin(glfwGetTime()));
+		shaderProgram.setFloat("cosinus", cos(glfwGetTime()));
+
 		// camera
 		// ------
-		glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+		glm::mat4 view = camera.GetViewMatrix();
 		shaderProgram.setMat4("view", view);
 
 
@@ -291,16 +245,17 @@ void processInput(GLFWwindow* window)
 	if (glfwGetKey(window, GLFW_KEY_P) == GLFW_RELEASE)
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	// WASD: camera movement
-	float cameraSpeed = static_cast<float>(5 * deltaTime);
-	float sprinting = 1.0f;
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-		cameraPos += cameraFront * cameraSpeed;
+		camera.ProcessKeyboardInput(FORWARD, deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-		cameraPos -= cameraFront * cameraSpeed;
+		camera.ProcessKeyboardInput(BACKWARD, deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-		cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+		camera.ProcessKeyboardInput(LEFT, deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-		cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+		camera.ProcessKeyboardInput(RIGHT, deltaTime);
+
+	if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS){}
+		
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -328,17 +283,5 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 	xoffset *= sensitivity;
 	yoffset *= sensitivity;
 
-	yaw += xoffset;
-	pitch += yoffset;
-
-	if (pitch > 89.0f)
-		pitch = 89.0f;
-	if (pitch < -89.0f)
-		pitch = -89.0f;
-
-	glm::vec3 direction;
-	direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-	direction.y = sin(glm::radians(pitch));
-	direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-	cameraFront = glm::normalize(direction);
+	camera.ProcessMouseMovement(xoffset, yoffset, firstMouse);
 }
